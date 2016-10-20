@@ -1,5 +1,8 @@
 package com.javaheat.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.javaheat.client.models.authentication.AuthenticationData;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpEntityEnclosingRequestBase;
@@ -110,8 +113,15 @@ public class JavaHeatCore {
     }
 
 
-    public static void main(String [] args ) {
-        System.out.println(sendRequest("authenticate"));
+    public static void main(String [] args ) throws IOException {
+        ObjectMapper mapper = new ObjectMapper();
+        AuthenticationData auth = mapper.readValue(sendRequest("authenticate"), AuthenticationData.class);
+        String Token = auth.getAccess().getToken().getId();
+        String Tenant = auth.getAccess().getToken().getTenant().getId();
+        System.out.println(Token);
+        System.out.println(Tenant);
+
+        //TODO Create the rest of the API Methods
     }
 
 
