@@ -9,7 +9,7 @@ public class AuthenticationData {
         return this.access;
     }
 
-    public void getAccess(Access access){
+    public void setAccess(Access access){
         this.access = access;
     }
 
