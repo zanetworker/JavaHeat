@@ -24,7 +24,9 @@ public class JavaHeatCore {
         ENDPOINT("10.10.243.1"),
         AUTH_PORT("5000"),
         HEAT_PORT("8004"),
+        IMAGE_PORT("9292"),
         HEAT_VERSION("v1"),
+        IMAGE_VERSION("v2"),
         USERNAME("admin"),
         PASSWORD("sonata"),
         TENANT_ID("admin"),
@@ -73,6 +75,7 @@ public class JavaHeatCore {
     }
 
 
+
     private static HttpResponse listStacksRequest(String endpoint) throws IOException {
 
         HttpGet getStack;
@@ -101,6 +104,33 @@ public class JavaHeatCore {
 
     }
 
+    private static HttpResponse createImage(String endpoint,
+                                            String template,
+                                            String containerFormat,
+                                            String diskFormat,
+                                            String name) throws IOException {
+        HttpPost createImage;
+        HttpClient httpClient = HttpClientBuilder.create().build();
+
+        if (isAuthenticated) {
+            StringBuilder buildUrl = new StringBuilder();
+            buildUrl.append("http://");
+            buildUrl.append(endpoint);
+            buildUrl.append(":");
+            buildUrl.append(Constants.IMAGE_PORT.toString());
+            buildUrl.append(String.format("/%s/images", Constants.IMAGE_VERSION.toString()));
+
+            createImage = new HttpPost(buildUrl.toString());
+            String requestBody =  "{ \"container_format\": \"bare\", \"disk_format\": \"raw\", \"name\": \"Ubuntu\"}";
+
+            createImage.setEntity(new StringEntity(requestBody, ContentType.APPLICATION_JSON));
+            createImage.addHeader(Constants.AUTHTOKEN_HEADER.toString(), token_id);
+
+        } else {
+            throw new IOException("You must Authenticate before issuing this request, please re-authenticate. ");
+        }
+        return httpClient.execute(createImage);
+    }
     private static HttpResponse createStack(String endpoint, String template) throws IOException {
 
         HttpPost createStack;
@@ -178,6 +208,38 @@ public class JavaHeatCore {
 
     }
 
+
+    public static String sendImageRequest(String messageType, String endpoint) {
+        HttpResponse response = null;
+        StringBuilder sb = null ;
+        String stackName= "helloHeat";
+
+        if (messageType != null) {
+            try {
+                switch (messageType) {
+                    case "createImage":
+
+                        response = createImage(endpoint, messageType, "bare", "raw", "Ubuntu");
+                        break;
+                }
+
+                // TODO add an if condition for delete stack since it does not return any response
+                sb = new StringBuilder();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
+
+                String line ;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line);
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return sb.toString();
+        } else {
+            return "";
+        }
+    }
     public static String sendRequest(String messageType, String endpoint) {
 
         HttpResponse response = null;
@@ -194,7 +256,7 @@ public class JavaHeatCore {
                         response = listStacksRequest(endpoint);
                         break;
                     case "createStack":
-                        String heatTemplate = JavaHeatUtils.readFile("./test.yml");
+                        String heatTemplate = JavaHeatUtils.readFile("./test.json");
                         response = createStack(endpoint, heatTemplate);
                         break;
                     case "deleteStack":
@@ -237,14 +299,16 @@ public class JavaHeatCore {
         tenant_id = auth.getAccess().getToken().getTenant().getId();
         token_id = auth.getAccess().getToken().getId();
 
+        String createImageRequest = sendImageRequest("createImage", Constants.ENDPOINT.toString());
+        System.out.println(createImageRequest);
 /*        String createStackRequest = sendRequest("createStack", Constants.ENDPOINT.toString());
         StackData stack = mapper.readValue(createStackRequest, StackData.class);
         System.out.println(stack.getStack().getId());*/
 
 
-        String findStackRequest = sendRequest("findStack", Constants.ENDPOINT.toString());
+/*        String findStackRequest = sendRequest("findStack", Constants.ENDPOINT.toString());
         StackData stack_two = mapper.readValue(findStackRequest, StackData.class);
-        System.out.println(stack_two.getStack().getStack_status());
+        System.out.println(stack_two.getStack().getStack_status());*/
 //        System.out.println(sendRequest("deleteStack", Constants.ENDPOINT.toString()));
 
         //TODO Create the rest of the API Methods
