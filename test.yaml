@@ -1,0 +1,16 @@
+
+heat_template_version: '2013-05-23'
+description: Simple template to test heat commands
+parameters:
+  flavor:
+    default: m1.tiny
+    type: string
+resources:
+  my_instance:
+    type: OS::Nova::Server
+    properties:
+      image: 356d8e0f-3332-48bc-a306-8b51876ef3c5
+      flavor: m1.small
+      key_name: test
+      networks:
+      - network: sonata-subnet-one

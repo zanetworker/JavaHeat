@@ -3,6 +3,7 @@ package com.javaheat.client;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.javaheat.client.models.Image.ImageData;
 import com.javaheat.client.models.authentication.AuthenticationData;
+import com.javaheat.client.models.stacks.StackData;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpDelete;
@@ -13,25 +14,23 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.entity.FileEntity;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 
 
 public class JavaHeatCore {
 
     public enum Constants {
-        ENDPOINT("10.10.243.1"),
         AUTH_PORT("5000"),
         HEAT_PORT("8004"),
         IMAGE_PORT("9292"),
         HEAT_VERSION("v1"),
         IMAGE_VERSION("v2"),
-        USERNAME("admin"),
-        PASSWORD("sonata"),
-        TENANT_ID("admin"),
         AUTHTOKEN_HEADER("X-AUTH-TOKEN"),
         AUTH_URI("/v2.0/tokens");
 
@@ -46,13 +45,21 @@ public class JavaHeatCore {
             return this.constantValue;
         }
     }
-    private static String tenant_id;
-    private static String token_id;
-    private static String image_id;
+    private String endpoint, username, password;
+    private String tenant_id;
+    private String token_id;
+    private String image_id;
 
-    private static boolean isAuthenticated = false;
 
-    private static HttpResponse constructAuthenticationRequest(String endpoint) throws IOException {
+    public JavaHeatCore(String endpoint, String username, String password, String tenant_name) {
+        this.username = username;
+        this.password = password;
+        this.tenant_id = tenant_name;
+        this.endpoint = endpoint;
+    }
+    private boolean isAuthenticated = false;
+
+    private HttpResponse constructAuthenticationRequest(String endpoint) throws IOException {
 
         StringBuilder buildUrl = new StringBuilder();
         buildUrl.append("http://");
@@ -65,21 +72,21 @@ public class JavaHeatCore {
 
         String body = String.format(
                 "{\"auth\": {\"tenantName\": \"%s\", \"passwordCredentials\": {\"username\": \"%s\", \"password\": \"%s\"}}}",
-                Constants.TENANT_ID.toString(),
-                Constants.USERNAME.toString(),
-                Constants.PASSWORD.toString());
+                this.tenant_id,
+                this.username,
+                this.password);
 
         post.setEntity(new StringEntity(body, ContentType.APPLICATION_JSON));
         HttpClient httpClient = HttpClientBuilder.create().build();
 
-        isAuthenticated = true;
+        this.isAuthenticated = true;
         return httpClient.execute(post);
 
     }
 
 
 
-    private static HttpResponse listStacksRequest(String endpoint) throws IOException {
+    private  HttpResponse listStacksRequest(String endpoint) throws IOException {
 
         HttpGet getStack;
         HttpClient httpClient = HttpClientBuilder.create().build();
@@ -91,7 +98,7 @@ public class JavaHeatCore {
             buildUrl.append(endpoint);
             buildUrl.append(":");
             buildUrl.append(Constants.HEAT_PORT.toString());
-            buildUrl.append(String.format("/%s/%s/stacks", Constants.HEAT_VERSION.toString(),tenant_id));
+            buildUrl.append(String.format("/%s/%s/stacks", Constants.HEAT_VERSION.toString(),this.tenant_id));
 
             System.out.println(buildUrl);
             System.out.println(token_id);
@@ -107,7 +114,7 @@ public class JavaHeatCore {
 
     }
 
-    private static HttpResponse createImage(String endpoint,
+    private  HttpResponse createImage(String endpoint,
                                             String template,
                                             String containerFormat,
                                             String diskFormat,
@@ -137,7 +144,7 @@ public class JavaHeatCore {
         return httpClient.execute(createImage);
     }
 
-    public static HttpResponse uploadBinaryImageData(String endpoint, String imageId,String binaryImage) throws IOException {
+    public  HttpResponse uploadBinaryImageData(String endpoint, String imageId,String binaryImage) throws IOException {
 
         HttpPut uploadImage;
         HttpClient httpClient = HttpClientBuilder.create().build();
@@ -160,10 +167,16 @@ public class JavaHeatCore {
         }
         return httpClient.execute(uploadImage);
     }
-    private static HttpResponse createStack(String endpoint, String template) throws IOException {
+    private  HttpResponse createStack(String endpoint, String template , String stackName) throws IOException {
 
         HttpPost createStack;
         HttpClient httpClient = HttpClientBuilder.create().build();
+
+
+        String jsonTemplate = JavaHeatUtils.convertYamlToJson(template);
+        JSONObject modifiedObject = new JSONObject();
+        modifiedObject.put("stack_name", stackName);
+        modifiedObject.put("template", new JSONObject(jsonTemplate));
 
         if (isAuthenticated) {
 
@@ -175,7 +188,7 @@ public class JavaHeatCore {
             buildUrl.append(String.format("/%s/%s/stacks", Constants.HEAT_VERSION.toString() ,tenant_id));
 
             createStack = new HttpPost(buildUrl.toString());
-            createStack.setEntity(new StringEntity(template, ContentType.APPLICATION_JSON));
+            createStack.setEntity(new StringEntity(modifiedObject.toString(), ContentType.APPLICATION_JSON));
             createStack.addHeader(Constants.AUTHTOKEN_HEADER.toString(), token_id);
 
             return httpClient.execute(createStack);
@@ -184,7 +197,7 @@ public class JavaHeatCore {
         }
     }
 
-    private static HttpResponse deleteStack(String endpoint,  String stackName, String stackId) throws IOException {
+    private  HttpResponse deleteStack(String endpoint,  String stackName, String stackId) throws IOException {
 
         HttpDelete deleteStack ;
         HttpClient httpClient = HttpClientBuilder.create().build();
@@ -200,7 +213,6 @@ public class JavaHeatCore {
                                             tenant_id,
                                             stackName,
                                             stackId));
-
             deleteStack = new HttpDelete(buildUrl.toString());
             deleteStack.addHeader(Constants.AUTHTOKEN_HEADER.toString(), token_id);
 
@@ -210,7 +222,7 @@ public class JavaHeatCore {
         }
     }
 
-    private static HttpResponse findStack(String endpoint, String stackIdentity) throws  IOException {
+    private  HttpResponse findStack(String endpoint, String stackIdentity) throws  IOException {
         HttpGet findStack;
         HttpClient httpClient = HttpClientBuilder.create().build();
 
@@ -237,8 +249,7 @@ public class JavaHeatCore {
 
     }
 
-
-    public static String sendImageRequest(String messageType, String endpoint) {
+    public  String sendImageRequest(String messageType) {
         HttpResponse response = null;
         StringBuilder sb = null ;
 
@@ -246,10 +257,10 @@ public class JavaHeatCore {
             try {
                 switch (messageType) {
                     case "createImage":
-                        response = createImage(endpoint, messageType, "bare", "raw", "test");
+                        response = createImage(this.endpoint, messageType, "bare", "raw", "test");
                         break;
                     case "uploadImage":
-                        response = uploadBinaryImageData(endpoint, image_id, "./images/mini.iso");
+                        response = uploadBinaryImageData(this.endpoint, image_id, "./images/mini.iso");
                         System.out.println(response.getStatusLine().getStatusCode());
                         break;
                 }
@@ -274,7 +285,7 @@ public class JavaHeatCore {
             return "";
         }
     }
-    public static String sendRequest(String messageType, String endpoint) {
+    public  String sendRequest(String messageType) {
 
         HttpResponse response = null;
         StringBuilder sb = null ;
@@ -284,20 +295,20 @@ public class JavaHeatCore {
             try {
                 switch (messageType) {
                     case "authenticate":
-                         response = constructAuthenticationRequest(endpoint);
+                         response = constructAuthenticationRequest(this.endpoint);
                         break;
                     case "listStacks":
-                        response = listStacksRequest(endpoint);
+                        response = listStacksRequest(this.endpoint);
                         break;
                     case "createStack":
-                        String heatTemplate = JavaHeatUtils.readFile("./test.json");
-                        response = createStack(endpoint, heatTemplate);
+                        String heatTemplate = JavaHeatUtils.readFile("./test.yaml");
+                        response = createStack(this.endpoint, heatTemplate, "testStack");
                         break;
                     case "deleteStack":
-                        response = deleteStack(endpoint, stackName, "86155aba-b65c-4008-a739-75d05586b86f");
+                        response = deleteStack(this.endpoint, stackName, "86155aba-b65c-4008-a739-75d05586b86f");
                         break;
                     case "findStack":
-                        response = findStack(endpoint,stackName);
+                        response = findStack(this.endpoint,stackName);
                         break;
                     case "checkStatus":
                         break;
@@ -327,24 +338,29 @@ public class JavaHeatCore {
 
     public static void main(String [] args ) throws IOException, InterruptedException {
 
+        String endpoint = "10.10.243.1", username = "admin", password = "sonata", tenant_name = "admin";
+
+        JavaHeatCore javaHeat = new JavaHeatCore(endpoint, username, password, tenant_name);
+
         ObjectMapper mapper = new ObjectMapper();
-        String authRequest = sendRequest("authenticate", Constants.ENDPOINT.toString());
+        String authRequest = javaHeat.sendRequest("authenticate");
 
         AuthenticationData auth = mapper.readValue(authRequest , AuthenticationData.class);
 
-        tenant_id = auth.getAccess().getToken().getTenant().getId();
-        token_id = auth.getAccess().getToken().getId();
+        javaHeat.tenant_id = auth.getAccess().getToken().getTenant().getId();
+        javaHeat.token_id = auth.getAccess().getToken().getId();
 
-        String createImageRequest = sendImageRequest("createImage", Constants.ENDPOINT.toString());
+        String createImageRequest = javaHeat.sendImageRequest("createImage");
 
         ImageData imageData = mapper.readValue(createImageRequest, ImageData.class);
-        image_id = imageData.getId();
+        javaHeat.image_id = imageData.getId();
 
-        sendImageRequest("uploadImage", Constants.ENDPOINT.toString());
+        javaHeat.sendImageRequest("uploadImage");
 
-/*        String createStackRequest = sendRequest("createStack", Constants.ENDPOINT.toString());
+        String createStackRequest = javaHeat.sendRequest("createStack");
+        System.out.println(createImageRequest);
         StackData stack = mapper.readValue(createStackRequest, StackData.class);
-        System.out.println(stack.getStack().getId());*/
+        System.out.println(stack.getStack().getId());
 
 
 /*        String findStackRequest = sendRequest("findStack", Constants.ENDPOINT.toString());
