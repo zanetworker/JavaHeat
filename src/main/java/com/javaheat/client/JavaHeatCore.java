@@ -1,19 +1,21 @@
 package com.javaheat.client;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.javaheat.client.models.Image.ImageData;
 import com.javaheat.client.models.authentication.AuthenticationData;
-import com.javaheat.client.models.stacks.StackData;
-import com.sun.xml.internal.bind.v2.runtime.reflect.opt.Const;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPut;
 import org.apache.http.entity.ContentType;
+import org.apache.http.entity.FileEntity;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
@@ -46,6 +48,7 @@ public class JavaHeatCore {
     }
     private static String tenant_id;
     private static String token_id;
+    private static String image_id;
 
     private static boolean isAuthenticated = false;
 
@@ -121,7 +124,9 @@ public class JavaHeatCore {
             buildUrl.append(String.format("/%s/images", Constants.IMAGE_VERSION.toString()));
 
             createImage = new HttpPost(buildUrl.toString());
-            String requestBody =  "{ \"container_format\": \"bare\", \"disk_format\": \"raw\", \"name\": \"Ubuntu\"}";
+            String requestBody =  String.format("{ \"container_format\": \"bare\"," +
+                                    "\"disk_format\": \"raw\"," +
+                                    " \"name\": \"%s\"}", name);
 
             createImage.setEntity(new StringEntity(requestBody, ContentType.APPLICATION_JSON));
             createImage.addHeader(Constants.AUTHTOKEN_HEADER.toString(), token_id);
@@ -130,6 +135,30 @@ public class JavaHeatCore {
             throw new IOException("You must Authenticate before issuing this request, please re-authenticate. ");
         }
         return httpClient.execute(createImage);
+    }
+
+    public static HttpResponse uploadBinaryImageData(String endpoint, String imageId,String binaryImage) throws IOException {
+
+        HttpPut uploadImage;
+        HttpClient httpClient = HttpClientBuilder.create().build();
+
+        if (isAuthenticated) {
+            StringBuilder buildUrl = new StringBuilder();
+            buildUrl.append("http://");
+            buildUrl.append(endpoint);
+            buildUrl.append(":");
+            buildUrl.append(Constants.IMAGE_PORT.toString());
+            buildUrl.append(String.format("/%s/images/%s/file", Constants.IMAGE_VERSION.toString(), imageId));
+
+            uploadImage = new HttpPut(buildUrl.toString());
+            uploadImage.setHeader(Constants.AUTHTOKEN_HEADER.toString(), token_id);
+            uploadImage.setHeader("Content-Type", "application/octet-stream");
+            uploadImage.setEntity(new FileEntity(new File(binaryImage)));
+
+        } else {
+            throw new IOException("You must Authenticate before issuing this request, please re-authenticate. ");
+        }
+        return httpClient.execute(uploadImage);
     }
     private static HttpResponse createStack(String endpoint, String template) throws IOException {
 
@@ -212,30 +241,35 @@ public class JavaHeatCore {
     public static String sendImageRequest(String messageType, String endpoint) {
         HttpResponse response = null;
         StringBuilder sb = null ;
-        String stackName= "helloHeat";
 
         if (messageType != null) {
             try {
                 switch (messageType) {
                     case "createImage":
-
-                        response = createImage(endpoint, messageType, "bare", "raw", "Ubuntu");
+                        response = createImage(endpoint, messageType, "bare", "raw", "test");
+                        break;
+                    case "uploadImage":
+                        response = uploadBinaryImageData(endpoint, image_id, "./images/mini.iso");
+                        System.out.println(response.getStatusLine().getStatusCode());
                         break;
                 }
 
-                // TODO add an if condition for delete stack since it does not return any response
-                sb = new StringBuilder();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
+                // TODO add tests and checks for responses
 
-                String line ;
-                while ((line = reader.readLine()) != null) {
-                    sb.append(line);
+                if (messageType != "uploadImage") {
+                    sb = new StringBuilder();
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
+
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        sb.append(line);
+                    }
                 }
 
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            return sb.toString();
+            return messageType != "uploadImage" ? sb.toString() : "No response is expected" ;
         } else {
             return "";
         }
@@ -270,6 +304,8 @@ public class JavaHeatCore {
                 }
 
                 // TODO add an if condition for delete stack since it does not return any response
+                // TODO add tests and checks for responses
+
                 sb = new StringBuilder();
                 BufferedReader reader = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
 
@@ -300,7 +336,12 @@ public class JavaHeatCore {
         token_id = auth.getAccess().getToken().getId();
 
         String createImageRequest = sendImageRequest("createImage", Constants.ENDPOINT.toString());
-        System.out.println(createImageRequest);
+
+        ImageData imageData = mapper.readValue(createImageRequest, ImageData.class);
+        image_id = imageData.getId();
+
+        sendImageRequest("uploadImage", Constants.ENDPOINT.toString());
+
 /*        String createStackRequest = sendRequest("createStack", Constants.ENDPOINT.toString());
         StackData stack = mapper.readValue(createStackRequest, StackData.class);
         System.out.println(stack.getStack().getId());*/

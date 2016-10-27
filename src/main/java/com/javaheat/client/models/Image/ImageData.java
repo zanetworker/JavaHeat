@@ -1,7 +1,28 @@
 package com.javaheat.client.models.Image;
 
-/**
- * Created by nle5220 on 27.10.2016.
- */
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ImageData {
+
+    private String id;
+    private String status;
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
 }
+
+
