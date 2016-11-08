@@ -1,10 +1,12 @@
 
 heat_template_version: '2013-05-23'
 description: Simple template to test heat commands
+
 parameters:
   flavor:
     default: m1.tiny
     type: string
+
 resources:
   my_instance:
     type: OS::Nova::Server
@@ -14,3 +16,42 @@ resources:
       key_name: test
       networks:
       - network: sonata-subnet-one
+
+  web_floating_IP:
+    type: OS::Nova::FloatingIP
+    properties:
+      pool: GATEWAY_NET
+
+  web_floating_IP_att:
+   type: OS::Nova::FloatingIPAssociation
+   properties:
+     floating_ip: { get_resource: web_floating_IP }
+     server_id: { get_resource: my_instance }
+
+  private_network:
+    type: OS::Neutron::Net
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: private_network }
+      cidr: 10.200.0.0/24
+      dns_nameservers:
+        - 8.8.8.8
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: GATEWAY_NET
+
+  router-interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet: { get_resource: private_subnet }
+
+  neutron-port:
+      type: OS::Neutron::Port
+      properties:
+        network: { get_resource: private_network }
