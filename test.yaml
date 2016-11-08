@@ -17,16 +17,14 @@ resources:
       networks:
       - network: sonata-subnet-one
 
-  web_floating_IP:
-    type: OS::Nova::FloatingIP
+  my_instance_two:
+    type: OS::Nova::Server
     properties:
-      pool: GATEWAY_NET
-
-  web_floating_IP_att:
-   type: OS::Nova::FloatingIPAssociation
-   properties:
-     floating_ip: { get_resource: web_floating_IP }
-     server_id: { get_resource: my_instance }
+      image: 356d8e0f-3332-48bc-a306-8b51876ef3c5
+      flavor: m1.small
+      key_name: test
+      networks:
+      - network: sonata-subnet-one
 
   private_network:
     type: OS::Neutron::Net
@@ -55,3 +53,9 @@ resources:
       type: OS::Neutron::Port
       properties:
         network: { get_resource: private_network }
+
+  web_floating_IP:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: GATEWAY_NET
+      port_id: { get_resource: neutron-port }

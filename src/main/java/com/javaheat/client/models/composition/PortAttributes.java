@@ -11,7 +11,15 @@ public class PortAttributes {
     private String name;
     private ArrayList<HashMap <String, String>> fixed_ips;
     private String mac_address;
-    private String floating_ip;
+    private String id;
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
 
     public String getName() {
         return name;
@@ -29,15 +37,6 @@ public class PortAttributes {
     public void setMac_address(String mac_address) {
         this.mac_address = mac_address;
     }
-
-    public String getFloating_ip() {
-        return floating_ip;
-    }
-
-    public void setFloating_ip(String floating_ip) {
-        this.floating_ip = floating_ip;
-    }
-
 
     public ArrayList<HashMap<String, String>> getFixed_ips() {
         return fixed_ips;

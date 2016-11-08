@@ -1,7 +1,6 @@
 package com.javaheat.client;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.javaheat.client.models.authentication.AuthenticationData;
 import com.javaheat.client.models.composition.*;
@@ -434,7 +433,7 @@ public class JavaStackCore {
 //
 //        System.out.println(uuid);
 
-//        Thread.sleep(5000);
+        Thread.sleep(10000);
         // sonata-demo-19df6a98f-9e11-4cb7-b3c0-InAdUnitTest-01
 
         //FindStack with name
@@ -446,7 +445,19 @@ public class JavaStackCore {
         System.out.println(listResources);
 
         ArrayList <Resource> resources = mapper.readValue(listResources, Resources.class).getResources();
+
+        //Output lists
+        ArrayList<HeatServer> servers = new ArrayList<>();
+        ArrayList<HeatPort> ports = new ArrayList<>();
+
+        //Helper lists
+        ArrayList<PortAttributes> portsAtts = new ArrayList<>();
+        ArrayList<FloatingIpAttributes> floatingIps = new ArrayList<>();
+
         for (Resource resource : resources) {
+            HeatServer heatServer = new HeatServer();
+            HeatPort heatPort = new HeatPort();
+
             System.out.println(resource.getResource_type());
 
             //Show ResourceData
@@ -456,17 +467,55 @@ public class JavaStackCore {
             System.out.println(showResourceData);
 
             switch(resource.getResource_type()) {
+
                 case "OS::Nova::Server":
                     ResourceData <ServerAttributes> serverResourceData = mapper.readValue(showResourceData,
                             new TypeReference<ResourceData<ServerAttributes>>(){});
-                    System.out.println(serverResourceData.getResource().getAttributes().getName());
+
+                    //Set Server
+                    heatServer.setServerId(serverResourceData.getResource().getPhysical_resource_id());
+                    heatServer.setServerName(serverResourceData.getResource().getAttributes().getName());
+                    servers.add(heatServer);
                     break;
+
                 case "OS::Neutron::Port":
                     ResourceData <PortAttributes> portResourceData = mapper.readValue(showResourceData,
                             new TypeReference<ResourceData<PortAttributes>>(){});
-                    System.out.println(portResourceData.getResource().getAttributes().getName());
+
+                    portsAtts.add(portResourceData.getResource().getAttributes());
+                    //Set Port
+                    heatPort.setIpAddress(portResourceData.getResource().getAttributes().getFixed_ips().get(0).get("ip_address"));
+                    heatPort.setMacAddress(portResourceData.getResource().getAttributes().getMac_address());
+                    heatPort.setPortName(portResourceData.getResource().getAttributes().getName());
+                    ports.add(heatPort);
+                    break;
+
+                case "OS::Neutron::FloatingIP":
+                    ResourceData <FloatingIpAttributes> floatingIPResourceData = mapper.readValue(showResourceData,
+                            new TypeReference<ResourceData<FloatingIpAttributes>>(){});
+                    floatingIps.add(floatingIPResourceData.getResource().getAttributes());
+                    String floatingIP = floatingIPResourceData.getResource().getAttributes().getFloating_ip_address();
+                    System.out.println("FloatingIP Resource Address: " + floatingIP);
+                    break;
+
+                case "OS::Neutron::Net": break;
+                case "OS::Neutron::Router": break;
+                default:
+                    System.out.println("invalid Type");
             }
         }
+
+        for (int i=0; i< ports.size(); i++) {
+            for (FloatingIpAttributes floatingIP : floatingIps) {
+                if (portsAtts.get(i).getId().equals(floatingIP.getPort_id())){
+                    ports.get(i).setFloatinIp(floatingIP.getFloating_ip_address());
+                }
+            }
+        }
+
+
+        System.out.println(servers);
+        System.out.println(ports);
 
     }
 
