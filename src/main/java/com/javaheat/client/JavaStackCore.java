@@ -4,6 +4,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.javaheat.client.models.authentication.AuthenticationData;
 import com.javaheat.client.models.composition.*;
+import com.javaheat.client.models.compute.Flavor;
+import com.javaheat.client.models.compute.FlavorsData;
+import com.javaheat.client.models.compute.LimitsData;
 import com.javaheat.client.models.stacks.StackData;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpResponseFactory;
@@ -30,6 +33,33 @@ import java.util.ArrayList;
 
 
 public class JavaStackCore {
+
+    public enum Constants {
+        AUTH_PORT("5000"),
+        HEAT_PORT("8004"),
+        IMAGE_PORT("9292"),
+        COMPUTE_PORT("8774"),
+        HEAT_VERSION("v1"),
+        IMAGE_VERSION("v2"),
+        COMPUTE_VERSION("v2"),
+        AUTHTOKEN_HEADER("X-AUTH-TOKEN"),
+        AUTH_URI("/v2.0/tokens");
+
+        private final String constantValue;
+
+        Constants(String constantValue) {
+            this.constantValue = constantValue;
+        }
+
+        @Override
+        public String toString() {
+            return this.constantValue;
+        }
+    }
+
+    private static class SingeltonJavaStackCoreHelper {
+        private static final JavaStackCore _javaStackCore = new JavaStackCore();
+    }
 
     private static JavaStackCore _javaStackCore;
     private String endpoint;
@@ -384,31 +414,67 @@ public class JavaStackCore {
 
     }
 
-    public enum Constants {
-        AUTH_PORT("5000"),
-        HEAT_PORT("8004"),
-        IMAGE_PORT("9292"),
-        HEAT_VERSION("v1"),
-        IMAGE_VERSION("v2"),
-        AUTHTOKEN_HEADER("X-AUTH-TOKEN"),
-        AUTH_URI("/v2.0/tokens");
+    //http://10.10.243.1:8774/v2/4c0cef53eb3141c3877a21fc86803f78/servers
 
-        private final String constantValue;
+    public HttpResponse listComputeLimits() throws IOException {
+        HttpGet getLimits = null;
+        HttpResponse response = null;
 
-        Constants(String constantValue) {
-            this.constantValue = constantValue;
+        HttpClient httpClient = HttpClientBuilder.create().build();
+        HttpResponseFactory factory = new DefaultHttpResponseFactory();
+
+        if (isAuthenticated) {
+            StringBuilder buildUrl = new StringBuilder();
+            buildUrl.append("http://");
+            buildUrl.append(endpoint);
+            buildUrl.append(":");
+            buildUrl.append(Constants.COMPUTE_PORT.toString());
+            buildUrl.append(String.format("/%s/%s/limits", Constants.COMPUTE_VERSION.toString(), this.tenant_id));
+
+            getLimits = new HttpGet(buildUrl.toString());
+            getLimits.addHeader(Constants.AUTHTOKEN_HEADER.toString(), this.token_id);
+
+            response = httpClient.execute(getLimits);
+            int status_code = response.getStatusLine().getStatusCode();
+            return (status_code == 200) ? response : factory.newHttpResponse(
+                    new BasicStatusLine(
+                            HttpVersion.HTTP_1_1,
+                            status_code,
+                            "List Failed with Status: " + status_code),
+                    null);
         }
-
-        @Override
-        public String toString() {
-            return this.constantValue;
-        }
+        return response;
     }
 
-    private static class SingeltonJavaStackCoreHelper {
-        private static final JavaStackCore _javaStackCore = new JavaStackCore();
-    }
+    public HttpResponse listComputeFlavors() throws IOException {
+        HttpGet getFlavors = null;
+        HttpResponse response = null;
 
+        HttpClient httpClient = HttpClientBuilder.create().build();
+        HttpResponseFactory factory = new DefaultHttpResponseFactory();
+
+        if (isAuthenticated) {
+            StringBuilder buildUrl = new StringBuilder();
+            buildUrl.append("http://");
+            buildUrl.append(endpoint);
+            buildUrl.append(":");
+            buildUrl.append(Constants.COMPUTE_PORT.toString());
+            buildUrl.append(String.format("/%s/%s/flavors", Constants.COMPUTE_VERSION.toString(), this.tenant_id));
+
+            getFlavors = new HttpGet(buildUrl.toString());
+            getFlavors.addHeader(Constants.AUTHTOKEN_HEADER.toString(), this.token_id);
+
+            response = httpClient.execute(getFlavors);
+            int status_code = response.getStatusLine().getStatusCode();
+            return (status_code == 200) ? response : factory.newHttpResponse(
+                    new BasicStatusLine(
+                            HttpVersion.HTTP_1_1,
+                            status_code,
+                            "List Failed with Status: " + status_code),
+                    null);
+        }
+        return response;
+    }
     public static void main(String[] args) throws IOException, InterruptedException, URISyntaxException {
 
         String endpoint = "10.10.243.1", username = "admin", password = "sonata", tenant_name = "admin";
@@ -423,6 +489,16 @@ public class JavaStackCore {
         javaStack.authenticateClient(endpoint);
         System.out.println(javaStack.getToken_id());
 
+        String listLimits = JavaStackUtils.convertHttpResponseToString(javaStack.listComputeLimits());
+        LimitsData data = mapper.readValue(listLimits, LimitsData.class);
+        System.out.println(data.getLimits().getAbsolute().getMaxTotalCores());
+
+        String listFlavors = JavaStackUtils.convertHttpResponseToString(javaStack.listComputeFlavors());
+        FlavorsData flavors = mapper.readValue(listFlavors, FlavorsData.class);
+        for (Flavor flavor : flavors.getFlavors()) {
+            System.out.println(flavor.getId() + ": " + flavor.getName());
+        }
+
 
 //        String template = JavaStackUtils.readFile ("./test.yaml");
 //        String createStackResponse = JavaStackUtils.convertHttpResponseToString(javaStack.createStack(template, "boo"));
@@ -432,90 +508,90 @@ public class JavaStackCore {
 //        String uuid = stack.getStack().getId();
 //
 //        System.out.println(uuid);
-
-        Thread.sleep(10000);
+//
+//        Thread.sleep(10000);
         // sonata-demo-19df6a98f-9e11-4cb7-b3c0-InAdUnitTest-01
 
-        //FindStack with name
-        String findStackResponse = JavaStackUtils.convertHttpResponseToString(javaStack.findStack("boo"));
-        String stackIdToDelete = mapper.readValue(findStackResponse, StackData.class).getStack().getId();
-
-        //List Stack Resources
-        String listResources = JavaStackUtils.convertHttpResponseToString(javaStack.listStackResources("boo", stackIdToDelete, null));
-        System.out.println(listResources);
-
-        ArrayList <Resource> resources = mapper.readValue(listResources, Resources.class).getResources();
-
-        //Output lists
-        ArrayList<HeatServer> servers = new ArrayList<>();
-        ArrayList<HeatPort> ports = new ArrayList<>();
-
-        //Helper lists
-        ArrayList<PortAttributes> portsAtts = new ArrayList<>();
-        ArrayList<FloatingIpAttributes> floatingIps = new ArrayList<>();
-
-        for (Resource resource : resources) {
-            HeatServer heatServer = new HeatServer();
-            HeatPort heatPort = new HeatPort();
-
-            System.out.println(resource.getResource_type());
-
-            //Show ResourceData
-            System.out.println(stackIdToDelete);
-            String showResourceData = JavaStackUtils.convertHttpResponseToString(javaStack.showResourceData("boo",stackIdToDelete,
-                    resource.getResource_name()));
-            System.out.println(showResourceData);
-
-            switch(resource.getResource_type()) {
-
-                case "OS::Nova::Server":
-                    ResourceData <ServerAttributes> serverResourceData = mapper.readValue(showResourceData,
-                            new TypeReference<ResourceData<ServerAttributes>>(){});
-
-                    //Set Server
-                    heatServer.setServerId(serverResourceData.getResource().getPhysical_resource_id());
-                    heatServer.setServerName(serverResourceData.getResource().getAttributes().getName());
-                    servers.add(heatServer);
-                    break;
-
-                case "OS::Neutron::Port":
-                    ResourceData <PortAttributes> portResourceData = mapper.readValue(showResourceData,
-                            new TypeReference<ResourceData<PortAttributes>>(){});
-
-                    portsAtts.add(portResourceData.getResource().getAttributes());
-                    //Set Port
-                    heatPort.setIpAddress(portResourceData.getResource().getAttributes().getFixed_ips().get(0).get("ip_address"));
-                    heatPort.setMacAddress(portResourceData.getResource().getAttributes().getMac_address());
-                    heatPort.setPortName(portResourceData.getResource().getAttributes().getName());
-                    ports.add(heatPort);
-                    break;
-
-                case "OS::Neutron::FloatingIP":
-                    ResourceData <FloatingIpAttributes> floatingIPResourceData = mapper.readValue(showResourceData,
-                            new TypeReference<ResourceData<FloatingIpAttributes>>(){});
-                    floatingIps.add(floatingIPResourceData.getResource().getAttributes());
-                    String floatingIP = floatingIPResourceData.getResource().getAttributes().getFloating_ip_address();
-                    System.out.println("FloatingIP Resource Address: " + floatingIP);
-                    break;
-
-                case "OS::Neutron::Net": break;
-                case "OS::Neutron::Router": break;
-                default:
-                    System.out.println("invalid Type");
-            }
-        }
-
-        for (int i=0; i< ports.size(); i++) {
-            for (FloatingIpAttributes floatingIP : floatingIps) {
-                if (portsAtts.get(i).getId().equals(floatingIP.getPort_id())){
-                    ports.get(i).setFloatinIp(floatingIP.getFloating_ip_address());
-                }
-            }
-        }
-
-
-        System.out.println(servers);
-        System.out.println(ports);
+//        //FindStack with name
+//        String findStackResponse = JavaStackUtils.convertHttpResponseToString(javaStack.findStack("boo"));
+//        String stackIdToDelete = mapper.readValue(findStackResponse, StackData.class).getStack().getId();
+//
+//        //List Stack Resources
+//        String listResources = JavaStackUtils.convertHttpResponseToString(javaStack.listStackResources("boo", stackIdToDelete, null));
+//        System.out.println(listResources);
+//
+//        ArrayList <Resource> resources = mapper.readValue(listResources, Resources.class).getResources();
+//
+//        //Output lists
+//        ArrayList<HeatServer> servers = new ArrayList<>();
+//        ArrayList<HeatPort> ports = new ArrayList<>();
+//
+//        //Helper lists
+//        ArrayList<PortAttributes> portsAtts = new ArrayList<>();
+//        ArrayList<FloatingIpAttributes> floatingIps = new ArrayList<>();
+//
+//        for (Resource resource : resources) {
+//            HeatServer heatServer = new HeatServer();
+//            HeatPort heatPort = new HeatPort();
+//
+//            System.out.println(resource.getResource_type());
+//
+//            //Show ResourceData
+//            System.out.println(stackIdToDelete);
+//            String showResourceData = JavaStackUtils.convertHttpResponseToString(javaStack.showResourceData("boo",stackIdToDelete,
+//                    resource.getResource_name()));
+//            System.out.println(showResourceData);
+//
+//            switch(resource.getResource_type()) {
+//
+//                case "OS::Nova::Server":
+//                    ResourceData <ServerAttributes> serverResourceData = mapper.readValue(showResourceData,
+//                            new TypeReference<ResourceData<ServerAttributes>>(){});
+//
+//                    //Set Server
+//                    heatServer.setServerId(serverResourceData.getResource().getPhysical_resource_id());
+//                    heatServer.setServerName(serverResourceData.getResource().getAttributes().getName());
+//                    servers.add(heatServer);
+//                    break;
+//
+//                case "OS::Neutron::Port":
+//                    ResourceData <PortAttributes> portResourceData = mapper.readValue(showResourceData,
+//                            new TypeReference<ResourceData<PortAttributes>>(){});
+//
+//                    portsAtts.add(portResourceData.getResource().getAttributes());
+//                    //Set Port
+//                    heatPort.setIpAddress(portResourceData.getResource().getAttributes().getFixed_ips().get(0).get("ip_address"));
+//                    heatPort.setMacAddress(portResourceData.getResource().getAttributes().getMac_address());
+//                    heatPort.setPortName(portResourceData.getResource().getAttributes().getName());
+//                    ports.add(heatPort);
+//                    break;
+//
+//                case "OS::Neutron::FloatingIP":
+//                    ResourceData <FloatingIpAttributes> floatingIPResourceData = mapper.readValue(showResourceData,
+//                            new TypeReference<ResourceData<FloatingIpAttributes>>(){});
+//                    floatingIps.add(floatingIPResourceData.getResource().getAttributes());
+//                    String floatingIP = floatingIPResourceData.getResource().getAttributes().getFloating_ip_address();
+//                    System.out.println("FloatingIP Resource Address: " + floatingIP);
+//                    break;
+//
+//                case "OS::Neutron::Net": break;
+//                case "OS::Neutron::Router": break;
+//                default:
+//                    System.out.println("invalid Type");
+//            }
+//        }
+//
+//        for (int i=0; i< ports.size(); i++) {
+//            for (FloatingIpAttributes floatingIP : floatingIps) {
+//                if (portsAtts.get(i).getId().equals(floatingIP.getPort_id())){
+//                    ports.get(i).setFloatinIp(floatingIP.getFloating_ip_address());
+//                }
+//            }
+//        }
+//
+//
+//        System.out.println(servers);
+//        System.out.println(ports);
 
     }
 
