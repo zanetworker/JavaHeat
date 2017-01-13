@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.logging.Logger;
 
 
 public class JavaStackCore {
@@ -433,6 +434,7 @@ public class JavaStackCore {
 
             getLimits = new HttpGet(buildUrl.toString());
             getLimits.addHeader(Constants.AUTHTOKEN_HEADER.toString(), this.token_id);
+            System.out.println(buildUrl);
 
             response = httpClient.execute(getLimits);
             int status_code = response.getStatusLine().getStatusCode();
@@ -459,7 +461,7 @@ public class JavaStackCore {
             buildUrl.append(endpoint);
             buildUrl.append(":");
             buildUrl.append(Constants.COMPUTE_PORT.toString());
-            buildUrl.append(String.format("/%s/%s/flavors", Constants.COMPUTE_VERSION.toString(), this.tenant_id));
+            buildUrl.append(String.format("/%s/%s/flavors/detail", Constants.COMPUTE_VERSION.toString(), this.tenant_id));
 
             getFlavors = new HttpGet(buildUrl.toString());
             getFlavors.addHeader(Constants.AUTHTOKEN_HEADER.toString(), this.token_id);
@@ -490,13 +492,17 @@ public class JavaStackCore {
         System.out.println(javaStack.getToken_id());
 
         String listLimits = JavaStackUtils.convertHttpResponseToString(javaStack.listComputeLimits());
-        LimitsData data = mapper.readValue(listLimits, LimitsData.class);
-        System.out.println(data.getLimits().getAbsolute().getMaxTotalCores());
+        String output = "{\"limits\": {\"rate\": [], \"absolute\": {\"maxServerMeta\": 128, \"maxPersonality\": 5, \"totalServerGroupsUsed\": 0, \"maxImageMeta\": 128, \"maxPersonalitySize\": 10240, \"maxTotalKeypairs\": 100, \"maxSecurityGroupRules\": 20, \"maxServerGroups\": 10, \"totalCoresUsed\": 8, \"totalRAMUsed\": 16384, \"totalInstancesUsed\": 7, \"maxSecurityGroups\": 10, \"totalFloatingIpsUsed\": 0, \"maxTotalCores\": 20, \"maxServerGroupMembers\": 10, \"maxTotalFloatingIps\": 10, \"totalSecurityGroupsUsed\": 1, \"maxTotalInstances\": 10, \"maxTotalRAMSize\": 51200}}}";
+
+        LimitsData data = mapper.readValue(output, LimitsData.class);
+        System.out.println(data.getLimits().getAbsolute().getTotalRAMUsed());
+
 
         String listFlavors = JavaStackUtils.convertHttpResponseToString(javaStack.listComputeFlavors());
+        System.out.println(listFlavors);
         FlavorsData flavors = mapper.readValue(listFlavors, FlavorsData.class);
         for (Flavor flavor : flavors.getFlavors()) {
-            System.out.println(flavor.getId() + ": " + flavor.getName());
+            System.out.println(flavor.getId() + ": " + flavor.getRam());
         }
 
 

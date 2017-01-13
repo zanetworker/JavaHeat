@@ -8,6 +8,34 @@ public class Flavor {
 
     String id;
     String name;
+    String vcpus;
+    String disk;
+
+    public String getRam() {
+        return Ram;
+    }
+
+    public void setRam(String ram) {
+        Ram = ram;
+    }
+
+    String Ram;
+
+    public String getDisk() {
+        return disk;
+    }
+
+    public void setDisk(String disk) {
+        this.disk = disk;
+    }
+
+    public String getVcpus() {
+        return vcpus;
+    }
+
+    public void setVcpus(String vcpus) {
+        this.vcpus = vcpus;
+    }
 
     public String getId() {
         return id;
