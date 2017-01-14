@@ -29,7 +29,6 @@ public class PortAttributes {
         this.name = name;
     }
 
-
     public String getMac_address() {
         return mac_address;
     }

@@ -2,6 +2,8 @@ package com.javaheat.client;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.javaheat.client.models.Image.Image;
+import com.javaheat.client.models.Image.Images;
 import com.javaheat.client.models.authentication.AuthenticationData;
 import com.javaheat.client.models.composition.*;
 import com.javaheat.client.models.compute.Flavor;
@@ -298,6 +300,9 @@ public class JavaStackCore {
         return httpClient.execute(createImage);
     }
 
+
+
+
     public HttpResponse uploadBinaryImageData(String endpoint, String imageId, String binaryImage) throws IOException {
 
         HttpPut uploadImage;
@@ -477,6 +482,38 @@ public class JavaStackCore {
         }
         return response;
     }
+
+    public HttpResponse listImages() throws IOException {
+
+        HttpGet listImages = null;
+        HttpResponse response = null;
+
+        HttpClient httpClient = HttpClientBuilder.create().build();
+        HttpResponseFactory factory = new DefaultHttpResponseFactory();
+
+        if (isAuthenticated) {
+
+            StringBuilder buildUrl = new StringBuilder();
+            buildUrl.append("http://");
+            buildUrl.append(endpoint);
+            buildUrl.append(":");
+            buildUrl.append(Constants.IMAGE_PORT.toString());
+            buildUrl.append(String.format("/%s/images", Constants.IMAGE_VERSION.toString()));
+
+            listImages = new HttpGet(buildUrl.toString());
+            listImages.addHeader(Constants.AUTHTOKEN_HEADER.toString(), this.token_id);
+
+            response = httpClient.execute(listImages);
+            int status_code = response.getStatusLine().getStatusCode();
+            return (status_code ==  200) ? response : factory.newHttpResponse(
+                    new BasicStatusLine(
+                            HttpVersion.HTTP_1_1,
+                            status_code,
+                            "BOOM! Listing Images Failed with Status: " + status_code),
+                    null);
+        }
+        return response;
+    }
     public static void main(String[] args) throws IOException, InterruptedException, URISyntaxException {
 
         String endpoint = "10.10.243.1", username = "admin", password = "sonata", tenant_name = "admin";
@@ -487,13 +524,19 @@ public class JavaStackCore {
         javaStack.setUsername(username);
         javaStack.setPassword(password);
         javaStack.setTenant_id(tenant_name);
-
         javaStack.authenticateClient(endpoint);
+
         System.out.println(javaStack.getToken_id());
+
+        String listImages = JavaStackUtils.convertHttpResponseToString(javaStack.listImages());
+        Images images = mapper.readValue(listImages, Images.class);
+        for (Image image : images.getImages()) {
+            System.out.println(image.getContainer_format() + ": " + image.getId() + ": " + image.getName());
+        }
 
         String listLimits = JavaStackUtils.convertHttpResponseToString(javaStack.listComputeLimits());
         String output = "{\"limits\": {\"rate\": [], \"absolute\": {\"maxServerMeta\": 128, \"maxPersonality\": 5, \"totalServerGroupsUsed\": 0, \"maxImageMeta\": 128, \"maxPersonalitySize\": 10240, \"maxTotalKeypairs\": 100, \"maxSecurityGroupRules\": 20, \"maxServerGroups\": 10, \"totalCoresUsed\": 8, \"totalRAMUsed\": 16384, \"totalInstancesUsed\": 7, \"maxSecurityGroups\": 10, \"totalFloatingIpsUsed\": 0, \"maxTotalCores\": 20, \"maxServerGroupMembers\": 10, \"maxTotalFloatingIps\": 10, \"totalSecurityGroupsUsed\": 1, \"maxTotalInstances\": 10, \"maxTotalRAMSize\": 51200}}}";
-
+        mapper = new ObjectMapper();
         LimitsData data = mapper.readValue(output, LimitsData.class);
         System.out.println(data.getLimits().getAbsolute().getTotalRAMUsed());
 
