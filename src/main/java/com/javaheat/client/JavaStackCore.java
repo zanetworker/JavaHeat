@@ -1,15 +1,10 @@
 package com.javaheat.client;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.javaheat.client.models.Image.Image;
-import com.javaheat.client.models.Image.Images;
-import com.javaheat.client.models.authentication.AuthenticationData;
-import com.javaheat.client.models.composition.*;
-import com.javaheat.client.models.compute.Flavor;
-import com.javaheat.client.models.compute.FlavorsData;
-import com.javaheat.client.models.compute.LimitsData;
-import com.javaheat.client.models.stacks.StackData;
+import com.javaheat.client.models.authentication.*;
+import com.javaheat.client.models.authenticationv3.AuthenticationDataV3;
+import com.javaheat.client.models.authenticationv3.CatalogItem;
+import com.javaheat.client.models.configuration.Config;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpResponseFactory;
 import org.apache.http.HttpVersion;
@@ -32,7 +27,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.logging.Logger;
 
 
 public class JavaStackCore {
@@ -46,7 +40,8 @@ public class JavaStackCore {
         IMAGE_VERSION("v2"),
         COMPUTE_VERSION("v2"),
         AUTHTOKEN_HEADER("X-AUTH-TOKEN"),
-        AUTH_URI("/v2.0/tokens");
+        AUTH_URI_V2("/v2.0/tokens"),
+        AUTH_URI_V3("/v3/auth/tokens");
 
         private final String constantValue;
 
@@ -119,7 +114,68 @@ public class JavaStackCore {
         return this.token_id;
     }
 
-    public void authenticateClient(String endpoint) throws IOException {
+
+    public void authenticateClientV3(String endpoint) throws IOException {
+        HttpClient httpClient = HttpClientBuilder.create().build();
+        HttpPost post;
+        HttpResponse response = null;
+
+        //Variables for endpoints
+        ArrayList<CatalogItem> catalog;
+        String endpoint_id ;
+        String endpoint_interface;
+
+        if (!isAuthenticated) {
+            StringBuilder buildUrl = new StringBuilder();
+            buildUrl.append("http://");
+            buildUrl.append(endpoint);
+            buildUrl.append(":");
+            buildUrl.append(Constants.AUTH_PORT.toString());
+            buildUrl.append(Constants.AUTH_URI_V3.toString());
+
+            post = new HttpPost(buildUrl.toString());
+            String body = String.format("{\n" +
+                    "    \"auth\": {\n" +
+                    "        \"identity\": {\n" +
+                    "            \"methods\": [\n" +
+                    "                \"password\"\n" +
+                    "            ],\n" +
+                    "            \"password\": {\n" +
+                    "                \"user\": {\n" +
+                    "                    \"name\": \"%s\",\n" +
+                    "                    \"domain\": {\n" +
+                    "                        \"name\": \"%s\"\n" +
+                    "                    },\n" +
+                    "                    \"password\": \"%s\"\n" +
+                    "                }\n" +
+                    "            }\n" +
+                    "        }\n" +
+                    "    }\n" +
+                    "}", this.username, this.tenant_id, this.password);
+
+            post.setEntity(new StringEntity(body, ContentType.APPLICATION_JSON));
+
+            response = httpClient.execute(post);
+            this.token_id = response.getFirstHeader("X-Subject-Token").getValue().toString();
+            System.out.println(this.token_id);
+            mapper = new ObjectMapper();
+
+//           AuthenticationDataV3 auth = mapper.readValue(
+//                    JavaStackUtils.convertHttpResponseToString(response),
+//                    AuthenticationDataV3.class
+//            );
+
+
+//          this.tenant_id = auth.getAccess().getToken().getTenant().getId();
+
+            this.isAuthenticated = true;
+
+        } else {
+            System.out.println("You are already authenticated");
+        }
+
+    }
+    public void authenticateClientV2(String endpoint) throws IOException {
 
         HttpClient httpClient = HttpClientBuilder.create().build();
         HttpPost post;
@@ -131,9 +187,10 @@ public class JavaStackCore {
             buildUrl.append(endpoint);
             buildUrl.append(":");
             buildUrl.append(Constants.AUTH_PORT.toString());
-            buildUrl.append(Constants.AUTH_URI.toString());
+            buildUrl.append(Constants.AUTH_URI_V2.toString());
 
             post = new HttpPost(buildUrl.toString());
+
 
             String body = String.format(
                     "{\"auth\": {\"tenantName\": \"%s\", \"passwordCredentials\": {\"username\": \"%s\", \"password\": \"%s\"}}}",
@@ -146,7 +203,7 @@ public class JavaStackCore {
             response = httpClient.execute(post);
             mapper = new ObjectMapper();
 
-            AuthenticationData auth = mapper.readValue(
+             AuthenticationData auth = mapper.readValue(
                     JavaStackUtils.convertHttpResponseToString(response),
                     AuthenticationData.class
             );
@@ -516,38 +573,49 @@ public class JavaStackCore {
     }
     public static void main(String[] args) throws IOException, InterruptedException, URISyntaxException {
 
-        String endpoint = "10.10.243.1", username = "admin", password = "sonata", tenant_name = "admin";
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper;
+        String vim_config = JavaStackUtils.readFile("./vim_configuration.yml");
+        String vim_config_json = JavaStackUtils.convertYamlToJson(vim_config);
+        System.out.println(vim_config_json);
+
+        mapper = new ObjectMapper();
+        Config config = mapper.readValue(vim_config_json, Config.class);
+
+        String endpoint = config.getVim().getEndpoint(),
+                username = config.getVim().getUsername(),
+                password = config.getVim().getPassword(),
+                domain = config.getVim().getDomain();
+
 
         JavaStackCore javaStack = JavaStackCore.getJavaStackCore();
         javaStack.setEndpoint(endpoint);
         javaStack.setUsername(username);
         javaStack.setPassword(password);
-        javaStack.setTenant_id(tenant_name);
-        javaStack.authenticateClient(endpoint);
+        javaStack.setTenant_id(domain);
+        javaStack.authenticateClientV3(endpoint);
 
+        System.out.println(endpoint + username + password + domain);
         System.out.println(javaStack.getToken_id());
-
-        String listImages = JavaStackUtils.convertHttpResponseToString(javaStack.listImages());
-        Images images = mapper.readValue(listImages, Images.class);
-        for (Image image : images.getImages()) {
-            System.out.println(image.getContainer_format() + ": " + image.getId() + ": " + image.getName());
-        }
-
-        String listLimits = JavaStackUtils.convertHttpResponseToString(javaStack.listComputeLimits());
-        String output = "{\"limits\": {\"rate\": [], \"absolute\": {\"maxServerMeta\": 128, \"maxPersonality\": 5, \"totalServerGroupsUsed\": 0, \"maxImageMeta\": 128, \"maxPersonalitySize\": 10240, \"maxTotalKeypairs\": 100, \"maxSecurityGroupRules\": 20, \"maxServerGroups\": 10, \"totalCoresUsed\": 8, \"totalRAMUsed\": 16384, \"totalInstancesUsed\": 7, \"maxSecurityGroups\": 10, \"totalFloatingIpsUsed\": 0, \"maxTotalCores\": 20, \"maxServerGroupMembers\": 10, \"maxTotalFloatingIps\": 10, \"totalSecurityGroupsUsed\": 1, \"maxTotalInstances\": 10, \"maxTotalRAMSize\": 51200}}}";
-        mapper = new ObjectMapper();
-        LimitsData data = mapper.readValue(output, LimitsData.class);
-        System.out.println(data.getLimits().getAbsolute().getTotalRAMUsed());
-
-
-        String listFlavors = JavaStackUtils.convertHttpResponseToString(javaStack.listComputeFlavors());
-        System.out.println(listFlavors);
-        FlavorsData flavors = mapper.readValue(listFlavors, FlavorsData.class);
-        for (Flavor flavor : flavors.getFlavors()) {
-            System.out.println(flavor.getId() + ": " + flavor.getRam());
-        }
-
+//
+//        String listImages = JavaStackUtils.convertHttpResponseToString(javaStack.listImages());
+//        Images images = mapper.readValue(listImages, Images.class);
+//        for (Image image : images.getImages()) {
+//            System.out.println(image.getContainer_format() + ": " + image.getId() + ": " + image.getName());
+//        }
+//
+//        String listLimits = JavaStackUtils.convertHttpResponseToString(javaStack.listComputeLimits());
+//        String output = "{\"limits\": {\"rate\": [], \"absolute\": {\"maxServerMeta\": 128, \"maxPersonality\": 5, \"totalServerGroupsUsed\": 0, \"maxImageMeta\": 128, \"maxPersonalitySize\": 10240, \"maxTotalKeypairs\": 100, \"maxSecurityGroupRules\": 20, \"maxServerGroups\": 10, \"totalCoresUsed\": 8, \"totalRAMUsed\": 16384, \"totalInstancesUsed\": 7, \"maxSecurityGroups\": 10, \"totalFloatingIpsUsed\": 0, \"maxTotalCores\": 20, \"maxServerGroupMembers\": 10, \"maxTotalFloatingIps\": 10, \"totalSecurityGroupsUsed\": 1, \"maxTotalInstances\": 10, \"maxTotalRAMSize\": 51200}}}";
+//        mapper = new ObjectMapper();
+//        LimitsData data = mapper.readValue(output, LimitsData.class);
+//        System.out.println(data.getLimits().getAbsolute().getTotalRAMUsed());
+//
+//
+//        String listFlavors = JavaStackUtils.convertHttpResponseToString(javaStack.listComputeFlavors());
+//        System.out.println(listFlavors);
+//        FlavorsData flavors = mapper.readValue(listFlavors, FlavorsData.class);
+//        for (Flavor flavor : flavors.getFlavors()) {
+//            System.out.println(flavor.getId() + ": " + flavor.getRam());
+//        }
 
 //        String template = JavaStackUtils.readFile ("./test.yaml");
 //        String createStackResponse = JavaStackUtils.convertHttpResponseToString(javaStack.createStack(template, "boo"));

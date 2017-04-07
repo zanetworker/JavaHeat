@@ -1,0 +1,5 @@
+vim:
+  endpoint: 10.100.32.200
+  domain: default
+  username: sonata.adel
+  password: s0n@t@.adel
