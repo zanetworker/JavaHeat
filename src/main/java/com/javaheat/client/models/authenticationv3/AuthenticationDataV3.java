@@ -1,5 +1,8 @@
 package com.javaheat.client.models.authenticationv3;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class AuthenticationDataV3 {
 
     Token token;

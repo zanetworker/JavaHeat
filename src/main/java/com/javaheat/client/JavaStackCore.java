@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.javaheat.client.models.authentication.*;
 import com.javaheat.client.models.authenticationv3.AuthenticationDataV3;
 import com.javaheat.client.models.authenticationv3.CatalogItem;
+import com.javaheat.client.models.authenticationv3.EndpointItem;
 import com.javaheat.client.models.configuration.Config;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpResponseFactory;
@@ -27,18 +28,19 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 
 public class JavaStackCore {
 
     public enum Constants {
+//        HEAT_PORT("8004"),
+//        IMAGE_PORT("9292"),
+//        COMPUTE_PORT("8774"),
+//        HEAT_VERSION("v1"),
+//        IMAGE_VERSION("v2"),
+//        COMPUTE_VERSION("v2"),
         AUTH_PORT("5000"),
-        HEAT_PORT("8004"),
-        IMAGE_PORT("9292"),
-        COMPUTE_PORT("8774"),
-        HEAT_VERSION("v1"),
-        IMAGE_VERSION("v2"),
-        COMPUTE_VERSION("v2"),
         AUTHTOKEN_HEADER("X-AUTH-TOKEN"),
         AUTH_URI_V2("/v2.0/tokens"),
         AUTH_URI_V3("/v3/auth/tokens");
@@ -60,14 +62,100 @@ public class JavaStackCore {
     }
 
     private static JavaStackCore _javaStackCore;
+
     private String endpoint;
     private String username;
     private String password;
     private String tenant_id;
     private ObjectMapper mapper;
     private String token_id;
-    private String image_id;
+//    private String image_id;
     private boolean isAuthenticated = false;
+
+    private static class Identity {
+        static String PORT;
+        static String VERSION;
+
+        public static String getPORT() {
+            return PORT;
+        }
+
+        public static void setPORT(String PORT) {
+            Identity.PORT = PORT;
+        }
+
+        public static String getVERSION() {
+            return VERSION;
+        }
+
+        public static void setVERSION(String VERSION) {
+            Identity.VERSION = VERSION;
+        }
+    }
+
+    private static class Compute {
+        static String PORT;
+        static String VERSION;
+
+        public static String getPORT() {
+            return PORT;
+        }
+
+        public static void setPORT(String PORT) {
+            Compute.PORT = PORT;
+        }
+
+        public static String getVERSION() {
+            return VERSION;
+        }
+
+        public static void setVERSION(String VERSION) {
+            Compute.VERSION = VERSION;
+        }
+    }
+
+    private static class Image {
+        static String PORT;
+        static String VERSION;
+
+        public static String getPORT() {
+            return PORT;
+        }
+
+        public static void setPORT(String PORT) {
+            Image.PORT = PORT;
+        }
+
+        public static String getVERSION() {
+            return VERSION;
+        }
+
+        public static void setVERSION(String VERSION) {
+            Image.VERSION = VERSION;
+        }
+    }
+
+    private static class Orchestration {
+        static String PORT;
+        static String VERSION;
+
+        public static String getPORT() {
+            return PORT;
+        }
+
+        public static void setPORT(String PORT) {
+            Orchestration.PORT = PORT;
+        }
+
+        public static String getVERSION() {
+            return VERSION;
+        }
+
+        public static void setVERSION(String VERSION) {
+            Orchestration.VERSION = VERSION;
+        }
+    }
+
 
     private JavaStackCore() {
     }
@@ -75,8 +163,6 @@ public class JavaStackCore {
     public static JavaStackCore getJavaStackCore() {
         return SingeltonJavaStackCoreHelper._javaStackCore;
     }
-
-
 
     public String getEndpoint() {
         return endpoint;
@@ -119,11 +205,7 @@ public class JavaStackCore {
         HttpClient httpClient = HttpClientBuilder.create().build();
         HttpPost post;
         HttpResponse response = null;
-
-        //Variables for endpoints
-        ArrayList<CatalogItem> catalog;
-        String endpoint_id ;
-        String endpoint_interface;
+        HashMap <String, String> endpoint_details = new HashMap<>();
 
         if (!isAuthenticated) {
             StringBuilder buildUrl = new StringBuilder();
@@ -156,21 +238,71 @@ public class JavaStackCore {
             post.setEntity(new StringEntity(body, ContentType.APPLICATION_JSON));
 
             response = httpClient.execute(post);
-            this.token_id = response.getFirstHeader("X-Subject-Token").getValue().toString();
-            System.out.println(this.token_id);
+            this.token_id = response.getFirstHeader("X-Subject-Token").getValue();
             mapper = new ObjectMapper();
 
-//           AuthenticationDataV3 auth = mapper.readValue(
-//                    JavaStackUtils.convertHttpResponseToString(response),
-//                    AuthenticationDataV3.class
-//            );
+           AuthenticationDataV3 auth = mapper.readValue(
+                    JavaStackUtils.convertHttpResponseToString(response),
+                    AuthenticationDataV3.class
+            );
 
+            ArrayList <CatalogItem> catalogItems = auth.getToken().getCatalog();
+            for (CatalogItem catalogItem : catalogItems ) {
+                String type = catalogItem.getType();
+                String id = catalogItem.getId();
 
-//          this.tenant_id = auth.getAccess().getToken().getTenant().getId();
+                for (EndpointItem endpointItem: catalogItem.getEndpoints()) {
+                    if (endpointItem.getIface().equals("public")) {
+                        String [] path_port = endpointItem.getUrl().split(":");;
+                        String []  path = path_port[2].split("/");
+                        String version, port;
 
-            this.isAuthenticated = true;
+                        switch (type) {
+                            case "identity":
+                                port = path[0];
+                                version = path[1];
+                                Identity.setPORT(port);
+                                Identity.setVERSION(version);
+                                break;
 
-        } else {
+                            case "orchestration":
+                                port = path[0];
+                                version = path[1];
+                                Orchestration.setPORT(port);
+                                Orchestration.setVERSION(version);
+                                break;
+
+                            case "image":
+                                port = path[0];
+                                version = "v2";
+                                Image.setPORT(port);
+                                Image.setVERSION(version);
+                                break;
+
+                            case "compute":
+                                port = path[0];
+                                version = path[1];
+                                Compute.setPORT(port);
+                                Compute.setVERSION(version);
+                                break;
+
+                            case "network":
+                                break;
+
+                            case "cloudformation":
+                                break;
+
+                            default:
+                                System.out.println("Invalid Type");
+                        }
+                    }
+                }
+            }
+
+          this.tenant_id = auth.getToken().getProject().getId();
+          this.isAuthenticated = true;
+
+        }  else{
             System.out.println("You are already authenticated");
         }
 
@@ -228,8 +360,8 @@ public class JavaStackCore {
             buildUrl.append("http://");
             buildUrl.append(endpoint);
             buildUrl.append(":");
-            buildUrl.append(Constants.HEAT_PORT.toString());
-            buildUrl.append(String.format("/%s/%s/stacks", Constants.HEAT_VERSION.toString(), this.tenant_id));
+            buildUrl.append(Orchestration.getPORT());
+            buildUrl.append(String.format("/%s/%s/stacks", Orchestration.getVERSION(), this.tenant_id));
 
             System.out.println(buildUrl);
             System.out.println(this.token_id);
@@ -260,12 +392,12 @@ public class JavaStackCore {
         if (isAuthenticated) {
             URIBuilder builder = new URIBuilder();
             String path = String.format("/%s/%s/stacks/%s/%s/resources/%s",
-                    Constants.HEAT_VERSION.toString(),
+                    Orchestration.getVERSION(),
                     this.tenant_id, stackName,stackId, resourceName);
 
             builder.setScheme("http")
                     .setHost(endpoint)
-                    .setPort(Integer.parseInt(Constants.HEAT_PORT.toString()))
+                    .setPort(Integer.parseInt(Orchestration.getPORT()))
                     .setPath(path);
 
             URI uri = builder.build();
@@ -299,12 +431,12 @@ public class JavaStackCore {
         if (isAuthenticated) {
             URIBuilder builder = new URIBuilder();
             String path = String.format("/%s/%s/stacks/%s/%s/resources",
-                    Constants.HEAT_VERSION.toString(),
+                    Orchestration.getVERSION(),
                     this.tenant_id, stackName, stackId);
 
             builder.setScheme("http")
                     .setHost(endpoint)
-                    .setPort(Integer.parseInt(Constants.HEAT_PORT.toString()))
+                    .setPort(Integer.parseInt(Orchestration.getPORT()))
                     .setPath(path);
 
             URI uri = builder.build();
@@ -340,8 +472,8 @@ public class JavaStackCore {
             buildUrl.append("http://");
             buildUrl.append(this.endpoint);
             buildUrl.append(":");
-            buildUrl.append(Constants.IMAGE_PORT.toString());
-            buildUrl.append(String.format("/%s/images", Constants.IMAGE_VERSION.toString()));
+            buildUrl.append(Image.getVERSION());
+            buildUrl.append(String.format("/%s/images", Image.getPORT()));
 
             createImage = new HttpPost(buildUrl.toString());
             String requestBody = String.format("{ \"container_format\": \"bare\"," +
@@ -370,8 +502,8 @@ public class JavaStackCore {
             buildUrl.append("http://");
             buildUrl.append(endpoint);
             buildUrl.append(":");
-            buildUrl.append(Constants.IMAGE_PORT.toString());
-            buildUrl.append(String.format("/%s/images/%s/file", Constants.IMAGE_VERSION.toString(), imageId));
+            buildUrl.append(Image.getPORT());
+            buildUrl.append(String.format("/%s/images/%s/file", Image.getVERSION(), imageId));
 
             uploadImage = new HttpPut(buildUrl.toString());
             uploadImage.setHeader(Constants.AUTHTOKEN_HEADER.toString(), this.token_id);
@@ -402,8 +534,8 @@ public class JavaStackCore {
             buildUrl.append("http://");
             buildUrl.append(this.endpoint);
             buildUrl.append(":");
-            buildUrl.append(Constants.HEAT_PORT.toString());
-            buildUrl.append(String.format("/%s/%s/stacks", Constants.HEAT_VERSION.toString(), tenant_id));
+            buildUrl.append(Orchestration.getVERSION());
+            buildUrl.append(String.format("/%s/%s/stacks", Orchestration.getVERSION(), tenant_id));
 
             System.out.println(buildUrl.toString());
             createStack = new HttpPost(buildUrl.toString());
@@ -435,9 +567,9 @@ public class JavaStackCore {
             buildUrl.append("http://");
             buildUrl.append(this.endpoint);
             buildUrl.append(":");
-            buildUrl.append(Constants.HEAT_PORT.toString());
+            buildUrl.append(Orchestration.getPORT());
             buildUrl.append(String.format("/%s/%s/stacks/%s/%s",
-                    Constants.HEAT_VERSION.toString(),
+                    Orchestration.getVERSION(),
                     tenant_id,
                     stackName,
                     stackId));
@@ -460,8 +592,8 @@ public class JavaStackCore {
             buildUrl.append("http://");
             buildUrl.append(this.endpoint);
             buildUrl.append(":");
-            buildUrl.append(Constants.HEAT_PORT.toString());
-            buildUrl.append(String.format("/%s/%s/stacks/%s", Constants.HEAT_VERSION.toString(), tenant_id, stackIdentity));
+            buildUrl.append(Orchestration.getPORT());
+            buildUrl.append(String.format("/%s/%s/stacks/%s", Orchestration.getVERSION(), tenant_id, stackIdentity));
 
             System.out.println(buildUrl);
             System.out.println(token_id);
@@ -491,8 +623,8 @@ public class JavaStackCore {
             buildUrl.append("http://");
             buildUrl.append(endpoint);
             buildUrl.append(":");
-            buildUrl.append(Constants.COMPUTE_PORT.toString());
-            buildUrl.append(String.format("/%s/%s/limits", Constants.COMPUTE_VERSION.toString(), this.tenant_id));
+            buildUrl.append(Compute.getPORT());
+            buildUrl.append(String.format("/%s/%s/limits", Compute.getVERSION(), this.tenant_id));
 
             getLimits = new HttpGet(buildUrl.toString());
             getLimits.addHeader(Constants.AUTHTOKEN_HEADER.toString(), this.token_id);
@@ -522,8 +654,8 @@ public class JavaStackCore {
             buildUrl.append("http://");
             buildUrl.append(endpoint);
             buildUrl.append(":");
-            buildUrl.append(Constants.COMPUTE_PORT.toString());
-            buildUrl.append(String.format("/%s/%s/flavors/detail", Constants.COMPUTE_VERSION.toString(), this.tenant_id));
+            buildUrl.append(Compute.getPORT());
+            buildUrl.append(String.format("/%s/%s/flavors/detail", Compute.getVERSION(), this.tenant_id));
 
             getFlavors = new HttpGet(buildUrl.toString());
             getFlavors.addHeader(Constants.AUTHTOKEN_HEADER.toString(), this.token_id);
@@ -554,8 +686,8 @@ public class JavaStackCore {
             buildUrl.append("http://");
             buildUrl.append(endpoint);
             buildUrl.append(":");
-            buildUrl.append(Constants.IMAGE_PORT.toString());
-            buildUrl.append(String.format("/%s/images", Constants.IMAGE_VERSION.toString()));
+            buildUrl.append(Image.getPORT());
+            buildUrl.append(String.format("/%s/images", Image.getVERSION()));
 
             listImages = new HttpGet(buildUrl.toString());
             listImages.addHeader(Constants.AUTHTOKEN_HEADER.toString(), this.token_id);
@@ -596,7 +728,7 @@ public class JavaStackCore {
 
         System.out.println(endpoint + username + password + domain);
         System.out.println(javaStack.getToken_id());
-//
+        //
 //        String listImages = JavaStackUtils.convertHttpResponseToString(javaStack.listImages());
 //        Images images = mapper.readValue(listImages, Images.class);
 //        for (Image image : images.getImages()) {

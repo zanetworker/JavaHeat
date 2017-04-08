@@ -1,5 +1,7 @@
 package com.javaheat.client.models.authenticationv3;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.ArrayList;
 
 public class CatalogItem {
@@ -8,6 +10,14 @@ public class CatalogItem {
     private String type;
     private String id;
     private String name;
+
+    public ArrayList<EndpointItem> getEndpoints() {
+        return endpoints;
+    }
+
+    public void setEndpoints(ArrayList<EndpointItem> endpoints) {
+        this.endpoints = endpoints;
+    }
 
     public String getId() {
         return id;
